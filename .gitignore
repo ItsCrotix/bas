@@ -13,6 +13,7 @@
 /dist
 /db
 /userdata
+/asar
 
 # misc
 .DS_Store

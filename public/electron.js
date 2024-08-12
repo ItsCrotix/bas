@@ -1,7 +1,11 @@
 const { app, BrowserWindow, session, ipcMain } = require("electron"); // electron
 // const isDev from "electron-is-dev"; // To check if electron is in development mode
 const path = require("path");
-const isDev = import("electron-is-dev");
+let isDev = false;
+
+import("electron-is-dev").then((module) => {
+  isDev = module.default;
+});
 let mainWindow; // Keep a global reference of the window object, if you don't, the window will be closed automatically when the JavaScript object is garbage collected.
 
 // Initializing the Electron Window
@@ -26,7 +30,7 @@ const createWindow = () => {
   );
 
   // Setting Window Icon - Asset file needs to be in the public/images folder.
-  mainWindow.setIcon(path.join(__dirname, "images/appicon.ico"));
+  // mainWindow.setIcon(path.join(__dirname, "images/appicon.ico"));
 
   // In development mode, if the window has loaded, then load the dev tools.
   if (isDev) {
