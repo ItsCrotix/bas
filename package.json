@@ -1,5 +1,5 @@
 {
-  "name": "bas",
+  "name": "BAS",
   "version": "0.1.0",
   "main": "public/electron.js",
   "homepage": "./",
@@ -13,7 +13,6 @@
     "@testing-library/jest-dom": "^5.14.1",
     "@testing-library/react": "^13.0.0",
     "@testing-library/user-event": "^13.2.1",
-    "electron-is-dev": "^3.0.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-scripts": "5.0.1",

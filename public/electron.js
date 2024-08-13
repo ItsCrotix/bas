@@ -1,12 +1,9 @@
 const { app, BrowserWindow, session, ipcMain } = require("electron"); // electron
 // const isDev from "electron-is-dev"; // To check if electron is in development mode
 const path = require("path");
-let isDev = false;
 
-import("electron-is-dev").then((module) => {
-  isDev = module.default;
-});
 let mainWindow; // Keep a global reference of the window object, if you don't, the window will be closed automatically when the JavaScript object is garbage collected.
+const isDev = !app.isPackaged; // Check if the app is in development mode
 
 // Initializing the Electron Window
 const createWindow = () => {
