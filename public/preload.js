@@ -1,13 +1,23 @@
 const { ipcRenderer, contextBridge } = require("electron");
 
 contextBridge.exposeInMainWorld("api", {
-  // invoke methods
-  testInvoke: (args) => ipcRenderer.invoke("test-invoke", args),
-  // Send Methods
-  testSend: (args) => ipcRenderer.send("test-send", args),
-  // Receive Methods
-  testReceive: (callback) =>
-    ipcRenderer.on("test-receive", (event, data) => {
-      callback(data);
-    }),
+  invoke: (channel, data) => {
+    return ipcRenderer.invoke(channel, data);
+  },
+
+  send: (channel, data) => {
+    ipcRenderer.send(channel, data);
+  },
+
+  receive: (channel, func) => {
+    ipcRenderer.on(channel, (event, ...args) => func(...args));
+  },
+
+  remove: (channel, func) => {
+    ipcRenderer.removeListener(channel, func);
+  },
+
+  removeAllListeners: (channel) => {
+    ipcRenderer.removeAllListeners(channel);
+  },
 });

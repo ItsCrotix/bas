@@ -1,97 +1,174 @@
-const { app, BrowserWindow, session, ipcMain } = require("electron"); // electron
-// const isDev from "electron-is-dev"; // To check if electron is in development mode
+const { app, BrowserWindow, session, ipcMain } = require("electron");
 const path = require("path");
+const ProtocolRegistry = require("protocol-registry");
 
-let mainWindow; // Keep a global reference of the window object, if you don't, the window will be closed automatically when the JavaScript object is garbage collected.
-const isDev = !app.isPackaged; // Check if the app is in development mode
+let mainWindow;
+let loginWindow;
+const isDev = !app.isPackaged;
 
-// Initializing the Electron Window
-const createWindow = () => {
-  mainWindow = new BrowserWindow({
-    width: 600, // width of window
-    height: 600, // height of window
+const loginState = {
+  state: "success",
+  isLoggedIn: false,
+};
+
+const createLoginWindow = () => {
+  loginWindow = new BrowserWindow({
+    width: 400,
+    height: 200,
     webPreferences: {
-      // The preload file where we will perform our app communication
-      preload: isDev
-        ? path.join(app.getAppPath(), "./public/preload.js") // Loading it from the public folder for dev
-        : path.join(app.getAppPath(), "./build/preload.js"), // Loading it from the build folder for production
-      contextIsolation: true, // Isolating context so our app is not exposed to random javascript executions making it safer.
+      preload: path.join(
+        app.getAppPath(),
+        isDev ? "./public/preload.js" : "./build/preload.js"
+      ),
+      contextIsolation: true,
+    },
+    titleBarStyle: "hidden",
+    resizable: false,
+    movable: true,
+  });
+
+  loginWindow.loadURL(
+    isDev
+      ? "http://localhost:3000"
+      : `file://${path.join(__dirname, "../build/index.html")}`
+  );
+
+  if (isDev) {
+    loginWindow.webContents.on("did-frame-finish-load", () => {
+      loginWindow?.webContents.openDevTools({ mode: "detach" });
+    });
+  }
+
+  loginWindow.on("closed", () => {
+    loginWindow = null;
+  });
+};
+
+const createMainWindow = (state) => {
+  mainWindow = new BrowserWindow({
+    width: 600,
+    height: 600,
+    webPreferences: {
+      preload: path.join(
+        app.getAppPath(),
+        isDev ? "./public/preload.js" : "./build/preload.js"
+      ),
+      contextIsolation: true,
     },
   });
 
-  // Loading a webpage inside the electron window we just created
   mainWindow.loadURL(
     isDev
-      ? "http://localhost:3000" // Loading localhost if dev mode
-      : `file://${path.join(__dirname, "../build/index.html")}` // Loading build file if in production
+      ? "http://localhost:3000"
+      : `file://${path.join(__dirname, "../build/index.html")}`
   );
 
-  // Setting Window Icon - Asset file needs to be in the public/images folder.
-  // mainWindow.setIcon(path.join(__dirname, "images/appicon.ico"));
+  mainWindow.webContents.on("did-finish-load", () => {
+    mainWindow.webContents.send("loginState", state.res);
+  });
 
-  // In development mode, if the window has loaded, then load the dev tools.
   if (isDev) {
     mainWindow.webContents.on("did-frame-finish-load", () => {
-      if (mainWindow === null) {
-        return;
-      }
-
-      mainWindow.webContents.openDevTools({ mode: "detach" });
+      mainWindow?.webContents.openDevTools({ mode: "detach" });
     });
   }
 };
 
-// ((OPTIONAL)) Setting the location for the userdata folder created by an Electron app. It default to the AppData folder if you don't set it.
 app.setPath(
   "userData",
-  isDev
-    ? path.join(app.getAppPath(), "userdata/") // In development it creates the userdata folder where package.json is
-    : path.join(process.resourcesPath, "userdata/") // In production it creates userdata folder in the resources folder
+  path.join(isDev ? app.getAppPath() : process.resourcesPath, "userdata/")
 );
 
-// When the app is ready to load
 app.whenReady().then(async () => {
-  createWindow(); // Create the mainWindow
+  createLoginWindow();
 
-  // If you want to add React Dev Tools
   if (isDev) {
-    await session.defaultSession
-      .loadExtension(
-        path.join(__dirname, `../userdata/extensions/react-dev-tools`) // This folder should have the chrome extension for React Dev Tools. Get it online or from your Chrome extensions folder.
-      )
-      .then((name) => console.log("Dev Tools Loaded"))
-      .catch((err) => console.log(err));
+    try {
+      await session.defaultSession.loadExtension(
+        path.join(__dirname, "../userdata/extensions/react-dev-tools")
+      );
+      console.log("Dev Tools Loaded");
+    } catch (err) {
+      console.log(err);
+    }
   }
 });
 
-// Exiting the app
+app.on("activate", () => {
+  if (mainWindow === null) {
+    return;
+  }
+
+  if (isDev) {
+    createDevProtocol();
+  } else {
+    createProtocol();
+  }
+
+  if (BrowserWindow.getAllWindows().length === 0) {
+    createLoginWindow();
+  }
+});
+
+// Handle all the IPC events here
+app.on("ready", () => {
+  ipcMain.handle("checkLoginState", async () => {
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    return loginState;
+  });
+
+  ipcMain.handle("login", (data, args) => {
+    if (args.username === "admin" || args.password === "admin") {
+      loginState.isLoggedIn = true;
+      loginState.state = "success";
+    } else {
+      loginState.isLoggedIn = false;
+      loginState.state = "error";
+    }
+    return loginState;
+  });
+
+  ipcMain.handle("redirectToMainApp", (event, args) => {
+    if (args.res.state === "success") {
+      createMainWindow(args);
+      loginWindow.close();
+    }
+  });
+
+  ipcMain.handle("exitProgram", () => {
+    if (process.platform !== "darwin") {
+      app.quit();
+    }
+  });
+});
+
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") {
     app.quit();
   }
 });
 
-// Activating the app
-app.on("activate", () => {
-  if (mainWindow === null) {
-    return;
-  }
-
-  if (BrowserWindow.getAllWindows().length === 0) {
-    createWindow();
-  }
-});
-
-app.on("ready", () => {
-  ipcMain.handle("test-invoke", (event, args) => {
-    return "true";
-  });
-});
-
-// Logging any exceptions
 process.on("uncaughtException", (error) => {
   console.log(`Exception: ${error}`);
   if (process.platform !== "darwin") {
     app.quit();
   }
 });
+
+const createProtocol = () => {
+  if (!app.isDefaultProtocolClient("buuradminsystem")) {
+    app.setAsDefaultProtocolClient("buuradminsystem");
+  }
+};
+
+const createDevProtocol = () => {
+  ProtocolRegistry.register({
+    protocol: "buuradminsystem",
+    command: `"${process.execPath}" "${path.resolve(process.argv[1])}" $_URL_`,
+    override: true,
+    script: true,
+    terminal: isDev,
+  })
+    .then(() => console.log("Protocol Registered"))
+    .catch((err) => console.log(err));
+};
